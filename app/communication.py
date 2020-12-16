@@ -3,13 +3,9 @@
 # -*- coding: UTF-8 -*-
 #-------------------------------------------------------------------------------
 
-from serial.tools import list_ports
 from collections import OrderedDict
-import serial
 import threading
-from queue import Queue
 from time import sleep
-import struct
 
 class search_thread(threading.Thread):
     def __init__(self, target, code,baudrates, callback):

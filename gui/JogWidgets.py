@@ -2,7 +2,7 @@
 # !/usr/bin/env python
 # -*- coding: UTF-8 -*-
 # -------------------------------------------------------------------------------
-from PySide2.QtWidgets import QGridLayout, QWidget,QVBoxLayout,QHBoxLayout,QPushButton, QLabel, QLineEdit, QGroupBox, QSlider, QDockWidget, QMainWindow, QSpacerItem, QSizePolicy, QSizePolicy
+from PySide2.QtWidgets import QGridLayout, QWidget,QVBoxLayout,QHBoxLayout,QPushButton, QLabel, QLineEdit, QGroupBox, QSlider, QGridLayout, QDockWidget, QMainWindow, QSpacerItem, QSizePolicy, QSizePolicy
 from PySide2.QtCore import Qt, QSize, QRegExp
 from PySide2.QtGui import QRegExpValidator
 from communication import VALUETYPE, SENDTYPE
@@ -42,43 +42,53 @@ class JogWidget(QWidget):
         return self._controlPins
 
     def gui_init(self):
+        control_group_layout = QVBoxLayout()
+        control_group_widget = QWidget()
+        control_group_widget.setLayout(control_group_layout)
+        self.layout.addWidget(control_group_widget)
+
+        rows=int(len(self._stepMotorAxies)/2)
+        columns=rows+int(len(self._stepMotorAxies)%2)
+
         '''Добавляем шаговики'''
         steps_group=QGroupBox("{}".format(self.app.tr("Steppers")))
+        steps_group.setContentsMargins(0, 0, 0, 0)
         steps_group.setStyleSheet("QGroupBox::title {"
             "text-align: left;"
             "font: bold 14px;"
             "})")
-        steps_group_layout=QVBoxLayout()
+        steps_group_layout=QGridLayout()
         steps_group.setLayout(steps_group_layout)
-        for step_axis in self._stepMotorAxies:
-            step_block = stepAxisWidget(step_axis, 1000, self.app, self, callback=None)
-            steps_group_layout.addWidget(step_block)
-        spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        steps_group_layout.addItem(spacer)
-        self.layout.addWidget(steps_group)
-
-
-        servo_and_led_layout = QVBoxLayout()
-        servo_and_led_widget = QWidget()
-        servo_and_led_widget.setLayout(servo_and_led_layout)
-
-        self.layout.addWidget(servo_and_led_widget)
+        row = 0
+        column = 0
+        for i, step_axis in enumerate(self._stepMotorAxies):
+            row=int(i/(rows))
+            column = i-columns*row
+            step_block = stepAxisWidget(step_axis, 1000, self.app, self)
+            if self.__motorActions: step_block.changed.connect(self.__motorActions)
+            steps_group_layout.addWidget(step_block,row,column, Qt.AlignCenter)
+        # spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        # steps_group_layout.addItem(spacer)
+        control_group_layout.addWidget(steps_group)
 
         servo_group=QGroupBox("{}".format(self.app.tr("Servos")))
+        servo_group.setContentsMargins(0, 0, 0, 0)
         servo_group.setStyleSheet("QGroupBox::title {"
             "text-align: left;"
             "font: bold 14px;"
             "})")
 
-        servo_group_layout=QVBoxLayout()
+        servo_group_layout=QGridLayout()
         servo_group.setLayout(servo_group_layout)
-        for servo_axis in self._servoMotorAxies:
+        row = 0
+        column = 0
+        for i, servo_axis in enumerate(self._servoMotorAxies):
+            row=int(i/(rows))
+            column = i-columns*row
             servo_block = servoAxisWidget(servo_axis, 1000, self.app,  180, self)
             if self.__motorActions: servo_block.changed.connect(self.__motorActions)
-            servo_group_layout.addWidget(servo_block)
-        spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        servo_group_layout.addItem(spacer)
-        servo_and_led_layout.addWidget(servo_group)
+            servo_group_layout.addWidget(servo_block,row,column, Qt.AlignCenter)
+        control_group_layout.addWidget(servo_group)
 
 
         led_group=QGroupBox("{}".format(self.app.tr("LED")))
@@ -93,7 +103,10 @@ class JogWidget(QWidget):
             switch = LedSwitch(self, target=pin) if len(labels)==0 else LedSwitch(self, target=pin, leftText=labels[0], rightText=labels[1])
             if self.__pinAcions: switch.switched.connect(self.__pinAcions)
             led_group_layout.addWidget(switch)
-        servo_and_led_layout.addWidget(led_group)
+        control_group_layout.addWidget(led_group)
+
+        spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        control_group_layout.addItem(spacer)
 
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.layout.addItem(spacer)
@@ -120,14 +133,14 @@ class LongButton( QPushButton ):
         self._state = 0
         self.name=name
         self.longpressed=0
-        self.clicked.connect(self.foo)
+        self.clicked.connect(self.longPress)
 
     def setDelay(self, delay):
         self.setAutoRepeat(True)
         self.setAutoRepeatInterval(delay)
         self.setAutoRepeatDelay(500)
 
-    def foo(self):
+    def longPress(self):
         if self.isDown():
             if self._state == 0:
                 self._state = 1
@@ -140,14 +153,16 @@ class LongButton( QPushButton ):
             pass
 
 class slideBar(QWidget):
-    def __init__(self, label, maxpos=180, text=None, input_width=50, qtapp=None, parent = None, callback=None, runner=None):
+
+    changed = Signal(int)
+
+    def __init__(self, label, maxpos=180, text=None, input_width=50, qtapp=None, parent = None, callback=None):
         QWidget.__init__(self, parent)
         self.parent=parent
         self.__label=label
         self.__maxpos=maxpos
         self.input_width=input_width
         self.callback=callback
-        self.__runner=runner
         self.__ipRegex=None
 
         self.__text=text
@@ -171,7 +186,7 @@ class slideBar(QWidget):
         layout.addWidget(self.pos_sld)
 
     def onValueChanged(self, value):
-        self.callback(value)
+        self.changed.emit(value)
 
     def setValue(self, value):
         self.pos_sld.setValue(value)
@@ -198,18 +213,19 @@ class inputField(QWidget):
 
     def gui_init(self):
 
-        layout=QHBoxLayout()
+        layout=QGridLayout()
+        layout.setContentsMargins(0,0,0,0)
         self.setLayout(layout)
 
         label=QLabel(self.__label, self)
-        layout.addWidget(label)
+        layout.addWidget(label,0,0,Qt.AlignCenter)
 
         self.__edit=QLineEdit(self.__text, self)
         self.__edit.setFixedWidth(self.input_width)
         if self.__ipRegex:
             ipValidator = QRegExpValidator(self.__ipRegex)
             self.__edit.setValidator(ipValidator)
-        layout.addWidget(self.__edit)
+        layout.addWidget(self.__edit,0,1,Qt.AlignCenter)
 
         self.__edit.textChanged.connect(self.__changed__)
 
@@ -218,8 +234,8 @@ class inputField(QWidget):
 
         if self.__runner:
             run_but=QPushButton(self)
-            run_but.setText(self.parent.qtapp.tr("Run"))
-            layout.addWidget(run_but)
+            run_but.setText(self.parent.qapp.tr("Run"))
+            layout.addWidget(run_but,0,3,Qt.AlignCenter)
 
             run_but.pressed.connect(self.__runner__)
 
@@ -243,16 +259,17 @@ class inputField(QWidget):
 
 
 class dirButtons(QWidget):
-    def __init__(self, delay, parent = None, callback=None):
+    def __init__(self, delay, parent = None, buttons_action = None):
         QWidget.__init__(self, parent)
         self.parent=parent
         self.__delay__=delay
-        self.callback=callback
+        self.buttons_action=buttons_action
         self.__long_buttos__=[]
 
         move_buttons={-100:None,-10:None,-1:1,1:1,10:None,100:None}
         self.sorted_move_buttons=OrderedDict(sorted(move_buttons.items(), key=lambda t: t[0]))
-
+        self.setMinimumHeight(32)
+        self.setContentsMargins(0,0,0,0)
 
         self.gui_init()
         self.update_delay()
@@ -266,49 +283,52 @@ class dirButtons(QWidget):
 
     def gui_init(self):
 
-        self.setMaximumHeight(32)
+        self.setMaximumHeight(16)
 
-        layout=QHBoxLayout()
+        layout=QGridLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(2)
         self.setLayout(layout)
 
-        i=0
-        for but in self.sorted_move_buttons:
+        for i,but in enumerate(self.sorted_move_buttons):
 
             if but==abs(but):
                 pref='p'
             else:
                 pref='m'
 
+            def some():
+                print('SOME')
             button = LongButton(self)
+            button.released.connect(some)
             button.setStyleSheet("padding: 0px;")
-            layout.addWidget(button)
+            layout.addWidget(button, 0,i, Qt.AlignCenter)
 
             if self.sorted_move_buttons[but]:
                 self.__long_buttos__.append(button)
 
             button.setIcon(Icon(r'jog\JOG{}{}_32'.format(pref,abs(but))))
             button.setIconSize(QSize(32,32))
-            button.setFixedSize(QSize(64,32))
+            button.setFixedSize(QSize(32,32))
             button.setText("")
-            button.pressed.connect(partial(self.callback, but))
-            i+=1
+            button.pressed.connect(partial(self.buttons_action, but))
+
 
 class servoAxisWidget(QWidget):
 
     changed = Signal(str, SENDTYPE)
 
-    def __init__(self, label, speed=1000, qtapp=None, maxpos=180, parent = None):
+    def __init__(self, label, speed=1000, qapp=None, maxpos=180, parent = None):
         QWidget.__init__(self, parent)
-        self.setMaximumWidth(400)
-        self.setMaximumHeight(120)
+        self.setMaximumWidth(250)
+        self.setMaximumHeight(100)
+        self.setContentsMargins(0, 0, 0, 0)
         self.parent=parent
         self.__label=label
         self.__speed=speed
         self.__maxpos=maxpos
         self.__dir_value=1
-        self.qtapp= qtapp
+        self.qapp = qapp
         self.__delay=self.__calc_delay__
         self.gui_init()
 
@@ -320,7 +340,7 @@ class servoAxisWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-        group=QGroupBox("{} {}".format(self.__label,self.qtapp.tr("axis")),self)
+        group=QGroupBox("{} {}".format(self.__label, self.qapp.tr("axis")), self)
 
         group.setStyleSheet("QGroupBox::title {"
             "text-align: left;"
@@ -332,7 +352,8 @@ class servoAxisWidget(QWidget):
         group_layout=QVBoxLayout()
         group.setLayout(group_layout)
 
-        self.pos_sld = slideBar(self.qtapp.tr("Direction"), parent =self, callback=self.servo_callback)
+        self.pos_sld = slideBar(self.qapp.tr("Direction"), parent = self)
+        self.pos_sld.changed.connect(self.servo_callback)
         group_layout.addWidget(self.pos_sld, self.__maxpos)
 
         other_options=QWidget()
@@ -342,10 +363,10 @@ class servoAxisWidget(QWidget):
         other_layout.setContentsMargins(0, 0, 0, 0)
         other_options.setLayout(other_layout)
 
-        speed_field=inputField(self.qtapp.tr("Speed"), self.__speed, value_type=VALUETYPE.VALUE, parent =self, callback=self.speed_changed)
+        speed_field = inputField(self.qapp.tr("Speed"), self.__speed, value_type=VALUETYPE.VALUE, parent =self, callback=self.speed_changed)
         other_layout.addWidget(speed_field, Qt.AlignLeft)
 
-        self.value_field=inputField(self.qtapp.tr("Value"), self.__dir_value, value_type=VALUETYPE.VALUE, ipRegex=QRegExp("^((-[1-9]\\d{,3})|([1-9]\\d{,3}))|[0]$"), parent =self, runner=self.but_setter)
+        self.value_field = inputField(self.qapp.tr("Value"), self.__dir_value, value_type=VALUETYPE.VALUE, ipRegex=QRegExp("^((-[1-9]\\d{,3})|([1-9]\\d{,3}))|[0]$"), parent =self, runner=self.but_setter)
         other_options.layout().addWidget(self.value_field, Qt.AlignRight)
 
 
@@ -365,19 +386,21 @@ class servoAxisWidget(QWidget):
         self.value_field.setText(str(value))
         print("F{2} {0}{1}".format(self.__label, value,self.__speed))
         self.changed.emit("F{0} {1}{2}".format(self.__speed, self.__label, value), SENDTYPE.IDLE)
-        # self.callback("F{0} {1}{2}".format(self.__speed, self.__label, value), send_type=SENDTYPE.IDLE)
 
 class stepAxisWidget(QWidget):
-    def __init__(self, label, speed=1000, qtapp=None, parent = None, callback=None):
+
+    changed = Signal(str, SENDTYPE)
+
+    def __init__(self, label, speed=1000, qapp=None, parent = None):
         QWidget.__init__(self, parent)
-        self.setMaximumWidth(400)
-        self.setMaximumHeight(120)
+        self.setMaximumWidth(250)
+        self.setMaximumHeight(100)
+        self.setContentsMargins(0, 0, 0, 0)
         self.parent=parent
-        self.callback=callback
         self.__label=label
         self.__speed=speed
         self.__dir_value=1
-        self.qtapp= qtapp
+        self.qapp= qapp
         self.__delay=self.__calc_delay__
         self.gui_init()
 
@@ -389,7 +412,7 @@ class stepAxisWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-        group=QGroupBox("{} {}".format(self.__label,self.qtapp.tr("axis")),self)
+        group=QGroupBox("{} {}".format(self.__label, self.qapp.tr("axis")), self)
 
         group.setStyleSheet("QGroupBox::title {"
             "text-align: left;"
@@ -401,20 +424,20 @@ class stepAxisWidget(QWidget):
         group_layout=QVBoxLayout()
         group.setLayout(group_layout)
 
-        self.dir_buttons=dirButtons(self.__delay, callback=self.axis_callback)
+        self.dir_buttons=dirButtons(self.__delay, buttons_action=self.axis_callback)
         group_layout.addWidget(self.dir_buttons)
 
         other_options=QWidget()
         group_layout.addWidget(other_options)
 
         other_layout=QHBoxLayout()
-        other_layout.setContentsMargins(0, 0, 0, 0)
+        other_layout.setContentsMargins(0, 10, 0, 0)
         other_options.setLayout(other_layout)
 
-        speed_field=inputField(self.qtapp.tr("Speed"), self.__speed, value_type=VALUETYPE.VALUE, parent =self, callback=self.speed_changed)
+        speed_field=inputField(self.qapp.tr("Speed"), self.__speed, value_type=VALUETYPE.VALUE, parent =self, callback=self.speed_changed)
         other_layout.addWidget(speed_field, Qt.AlignLeft)
 
-        value_field=inputField(self.qtapp.tr("Value"), self.__dir_value, value_type=VALUETYPE.VALUE, ipRegex=QRegExp("^((-[1-9]\\d{,3})|([1-9]\\d{,3}))|[0]$"), parent =self, runner=self.axis_callback)
+        value_field=inputField(self.qapp.tr("Value"), self.__dir_value, value_type=VALUETYPE.VALUE, ipRegex=QRegExp("^((-[1-9]\\d{,3})|([1-9]\\d{,3}))|[0]$"), parent =self, runner=self.axis_callback)
         other_options.layout().addWidget(value_field, Qt.AlignRight)
 
 
@@ -428,4 +451,5 @@ class stepAxisWidget(QWidget):
 
     def axis_callback(self, dir_and_length):
         if int(dir_and_length):
-            self.callback("F{2} {0}{1}".format(self.__label, dir_and_length ,self.__speed), send_type=SENDTYPE.JOG)
+            print("F{2} {0}{1}".format(self.__label, dir_and_length, self.__speed))
+            self.changed.emit("F{2} {0}{1}".format(self.__label, dir_and_length ,self.__speed), SENDTYPE.JOG)

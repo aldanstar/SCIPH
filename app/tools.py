@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 import os
-import cv2
 import numpy as np
 
 class tools: #набор статических функций для расчета

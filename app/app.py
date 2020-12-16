@@ -41,12 +41,12 @@ class Application:
 
         '''Инициализация Qt приложения'''
         # Создание приложение
-        self.app = QApplication(sys.argv)
+        self.qapp = QApplication(sys.argv)
         self.__app_working_status = True
         # Установка локлизатора
-        translator = QTranslator(self.app)
+        translator = QTranslator(self.qapp)
         translator.load('lang/tr_ru', os.path.dirname(__file__))
-        self.app.installTranslator(translator)
+        self.qapp.installTranslator(translator)
 
         self.mainDialog=MainDialog(self, self.title)
         self.mainDialog.closeApp.connect(self.__finalize_before_quit)
@@ -58,12 +58,13 @@ class Application:
         self.gui_init()
         self.communication_init()
 
-        sys.exit(self.app.exec_())
+        sys.exit(self.qapp.exec_())
 
     def __finalize_before_quit(self):
         self.__app_working_status = False
+        if self.grbl.connection: self.grbl.connection.close()
         if self.communication_thread: self.communication_thread.join()
-        self.app.exit()
+        self.qapp.exit()
 
     def retuenicon(self, name):
         return QIcon(
@@ -104,12 +105,12 @@ class Application:
 
         gen_menu.addChildren(menu_item(u'GRBL', self.showGrblDialog))
 
-        file_menu=menu_item(self.app.tr(u'File'))
+        file_menu=menu_item(self.qapp.tr(u'File'))
         file_menu.addChildren(menu_item(u'New', self.newProject),
                               menu_item(u'Open', self.openProject),
                               menu_item(u'Import...', self.openFile),
                               menu_item(u'Save', self.saveProject),
-                              menu_item(u'Exit', self.app.exit))
+                              menu_item(u'Exit', self.qapp.exit))
 
         pref_menu.addChildren(gen_menu, menu_item(u'Settings'))
 
@@ -129,7 +130,7 @@ class Application:
         self.mainDialog.addPermanentStatusObj(self.progressBar)
 
         '''Инициализациия таблицы содержания'''
-        treeDock = QDockWidget(self.app.tr(u'Project tree'), self.mainDialog)
+        treeDock = QDockWidget(self.qapp.tr(u'Project tree'), self.mainDialog)
         treeDock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         self.mainDialog.addDockWidget(Qt.LeftDockWidgetArea, treeDock)
 
@@ -139,7 +140,7 @@ class Application:
         treeDock.setWidget(self.project_tree)
 
         '''Инициализациия центра'''
-        jog = JogWidget(app=self.app, axies = self.controls, pinAcions = self.pinAcions, motorActions=self.send_to_grbl)
+        jog = JogWidget(app=self.qapp, axies = self.controls, pinAcions = self.pinAcions, motorActions=self.send_to_grbl)
         self.mainDialog.addToCenter(jog)
         jog.raise_()
 
@@ -154,10 +155,10 @@ class Application:
     def setProgress(self, step, steps):
         value = step/float(len(steps))*100.
         indx = int(ceil(step-1))
-        text = self.app.tr(steps[indx])
+        text = self.qapp.tr(steps[indx])
         self.progressBar.setFormat("{0} - {1}%".format(text,round(value,0)))
         self.progressBar.setValue(value)
-        self.app.processEvents()
+        self.qapp.processEvents()
 
     def on_tree_clicked(self, index):
         item = self.project_tree.selectedIndexes()[0]
@@ -176,7 +177,7 @@ class Application:
 
     def openProject(self):
 
-        fileName, _ = QFileDialog.getOpenFileName(self.mainDialog, self.app.tr("Load project"),  ".\\", self.app.tr("Project file (*.tpr)"))
+        fileName, _ = QFileDialog.getOpenFileName(self.mainDialog, self.qapp.tr("Load project"), ".\\", self.qapp.tr("Project file (*.tpr)"))
 
         infile = open(fileName, 'rb')
         self.project = pickle.load(infile)
@@ -191,7 +192,7 @@ class Application:
 
 
     def saveProject(self):
-        fileName, _  = QFileDialog.getSaveFileName(self.mainDialog,  self.app.tr("Save project"), ".\\", self.app.tr("Project file (*.tpr)"))
+        fileName, _  = QFileDialog.getSaveFileName(self.mainDialog, self.qapp.tr("Save project"), ".\\", self.qapp.tr("Project file (*.tpr)"))
         outfile  = open(fileName, "wb")
         pickle.dump(self.project, outfile)
         outfile .close()
@@ -212,7 +213,7 @@ class Application:
 
 
     def openFile(self):
-        path_to_file, _ = QFileDialog.getOpenFileName(self.mainDialog, self.app.tr("Load Image"), self.app.tr(u".\example_imgs"), self.app.tr("Images (*.jpg)"))
+        path_to_file, _ = QFileDialog.getOpenFileName(self.mainDialog, self.qapp.tr("Load Image"), self.qapp.tr(u".\example_imgs"), self.qapp.tr("Images (*.jpg)"))
         # path_to_file, _ = QFileDialog.getOpenFileName(self.mainDialog, self.app.tr("Load Image"), self.app.tr("~/Desktop/"), self.app.tr("Images (*.jpg)"))
 
         # Определяем тип файла на просвет или на подсветку
@@ -307,7 +308,7 @@ class Application:
         results = pool.map(self.__check_ip__, ip_candidates)
         index = np.where(results!=None)[0][0]
         if not results[index]:
-            print(self.app.tr('There is not  devices in current net'))
+            # print(self.qapp.tr('There is not  devices in current net'))
             return
         pool.close()
         pool.join()
@@ -319,7 +320,7 @@ class Application:
 
         self.settings.grblip = results[index]
         self.settings.write()
-        print(self.app.tr('Connected to')+' {ip}'.format(ip=results[index]))
+        print(self.qapp.tr('Connected to') + ' {ip}'.format(ip=results[index]))
         return True
 
     def showAbout(self):
